@@ -1,3 +1,4 @@
+# D:\project\Python\MyLibrary\app\views\book.py
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -48,15 +49,11 @@ class BookListView(APIView):
             'total': queryset.count(),
             'page': page,
             'page_size': page_size,
-            'items': BookOutSerializer(queryset[(page-1)*page_size:page*page_size], many=True).data
+            'items': BookOutSerializer(queryset[(page-1)*page_size:page*page_size], many=True).data,
         }
         return Response(BookListOutSerializer(result).data, status=status.HTTP_200_OK)
 
-    @extend_schema(
-        summary="新增图书",
-        request=BookCreateSerializer,
-        responses=BookOutSerializer,
-    )
+    @extend_schema(summary="新增图书", request=BookCreateSerializer, responses=BookOutSerializer)
     def post(self, request):
         serializer = BookCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -70,38 +67,24 @@ class BookDetailView(APIView):
     serializer_class = BookUpdateSerializer
 
     def get_object(self, book_id: int) -> Book:
-        book = get_object_or_404(Book, book_id=book_id)
-        self.check_object_permissions(self.request, book)
-        return book
+        # 查询时直接带上 owner 条件：书不存在 / 属于他人 → 均返回 404，
+        # 避免 403 泄露 book_id 是否真实存在（IDOR 信息泄露）。
+        return get_object_or_404(Book, book_id=book_id, owner=self.request.user)
 
-    @extend_schema(
-        summary="查询图书详情",
-        responses=BookOutSerializer,
-    )
+    @extend_schema(summary="查询图书详情", responses=BookOutSerializer)
     def get(self, request, book_id: int):
         book = self.get_object(book_id)
         return Response(BookOutSerializer(book).data, status=status.HTTP_200_OK)
 
-    @extend_schema(
-        summary="全量更新图书",
-        request=BookUpdateSerializer,
-        responses=BookOutSerializer,
-    )
+    @extend_schema(summary="全量更新图书", request=BookUpdateSerializer, responses=BookOutSerializer)
     def put(self, request, book_id: int):
         return self._update(request, book_id, partial=False)
 
-    @extend_schema(
-        summary="部分更新图书",
-        request=BookUpdateSerializer,
-        responses=BookOutSerializer,
-    )
+    @extend_schema(summary="部分更新图书", request=BookUpdateSerializer, responses=BookOutSerializer)
     def patch(self, request, book_id: int):
         return self._update(request, book_id, partial=True)
 
-    @extend_schema(
-        summary="删除图书",
-        responses=None
-    )
+    @extend_schema(summary="删除图书", responses=None)
     def delete(self, request, book_id: int):
         book = self.get_object(book_id)
         book.delete()
