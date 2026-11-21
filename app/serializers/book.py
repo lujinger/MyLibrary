@@ -24,12 +24,13 @@ class BookUpdateSerializer(serializers.ModelSerializer):
         model = Book
         fields = [
             'book_name',
-                  'author',
-                  'publisher',
-                  'description',
-                  'cover_url',
-                  'isbn',
-                  'permission'
+            'author',
+            'publisher',
+            'description',
+            'cover_url',
+            'isbn',
+            'permission',
+            'borrow_status'
         ]
 
 class BookOutSerializer(serializers.ModelSerializer):
