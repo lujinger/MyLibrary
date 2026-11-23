@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from app.models.book import Book
+from app.models.library import Library
 from app.permissions import IsOwner
 from app.serializers.book import (
     BookCreateSerializer,
@@ -27,6 +28,7 @@ class BookListView(APIView):
         description="按书名/作者模糊搜索，分页返回当前登录用户创建的图书",
         parameters=[
             OpenApiParameter(name='keyword', description='搜索关键词（匹配书名或作者）', required=False, type=str),
+            OpenApiParameter(name='library_id', description='按图书馆过滤', required=False, type=int),
             OpenApiParameter(name='page', description='页码，默认1', required=False, type=int),
             OpenApiParameter(name='page_size', description='每页数量，默认10，最大50', required=False, type=int),
         ],
@@ -42,6 +44,12 @@ class BookListView(APIView):
 
         # 数据隔离：只查询当前登录用户的图书
         queryset = Book.objects.filter(owner=request.user)
+        library_id = request.query_params.get('library_id')
+        if library_id:
+            try:
+                queryset = queryset.filter(library_id=int(library_id))
+            except ValueError:
+                return Response({'detail': 'library_id 必须是整数'}, status=status.HTTP_400_BAD_REQUEST)
         if keyword:
             queryset = queryset.filter(Q(book_name__icontains=keyword) | Q(author__icontains=keyword))
 
@@ -53,12 +61,30 @@ class BookListView(APIView):
         }
         return Response(BookListOutSerializer(result).data, status=status.HTTP_200_OK)
 
-    @extend_schema(summary="新增图书", request=BookCreateSerializer, responses=BookOutSerializer)
+    @extend_schema(
+        summary="新增图书",
+        description="不传 library_id 时自动放入默认图书馆",
+        request=BookCreateSerializer, responses=BookOutSerializer,
+    )
     def post(self, request):
         serializer = BookCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        book = serializer.save(owner=request.user)
+        try:
+            library = self._resolve_library(request)
+        except ValueError:
+            return Response({'detail': 'library_id 必须是整数'}, status=status.HTTP_400_BAD_REQUEST)
+        # 关键：创建书时必须把 library 一并传入，否则 library_id 为空触发 NOT NULL 约束
+        book = serializer.save(owner=request.user, library=library)
         return Response(BookOutSerializer(book).data, status=status.HTTP_201_CREATED)
+
+    def _resolve_library(self, request) -> Library:
+        # library_id 不在 BookCreateSerializer 白名单内，这里直接从原始请求数据读取
+        library_id = request.data.get('library_id')
+        if library_id:
+            # 带上 owner 条件：传别人的馆 → 404（IDOR 防护）
+            return get_object_or_404(Library, library_id=int(library_id), owner=request.user)
+        # 注册信号保证每个用户必有默认馆
+        return get_object_or_404(Library, owner=request.user, is_default=True)
 
 class BookDetailView(APIView):
     """图书详情 / 更新 / 删除"""

@@ -9,12 +9,12 @@ class BookCreateSerializer(serializers.ModelSerializer):
         model = Book
         fields = [
             'book_name',
-                  'author',
-                  'publisher',
-                  'description',
-                  'cover_url',
-                  'isbn',
-                  'permission'
+            'author',
+            'publisher',
+            'description',
+            'cover_url',
+            'isbn',
+            'permission'
         ]
 
 class BookUpdateSerializer(serializers.ModelSerializer):
@@ -49,6 +49,7 @@ class BookOutSerializer(serializers.ModelSerializer):
             'permission',
             'borrow_status',
             'view_count',
+            'library_id',
             'created_at',
             'updated_at'
         ]
