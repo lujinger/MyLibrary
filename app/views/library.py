@@ -1,3 +1,4 @@
+# D:\project\Python\MyLibrary\app\views\library.py
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
@@ -25,7 +26,7 @@ class LibraryListView(APIView):
     @extend_schema(
         summary="查询我的图书馆列表",
         description="获取当前用户的所有图书馆，包括默认馆和自定义馆",
-        responses=LibraryOutSerializer(many=True)
+        responses=LibraryOutSerializer(many=True),
     )
     def get(self, request):
         # annotate 一次 SQL 拿到每馆 book_count，避免逐馆 count（N+1）
@@ -39,7 +40,8 @@ class LibraryListView(APIView):
         responses=LibraryOutSerializer,
     )
     def post(self, request):
-        serializer = LibraryCreateSerializer(data=request.data)
+        # 传入 context 让 serializer.validate 能拿到当前用户做重名校验
+        serializer = LibraryCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         library = serializer.save(owner=request.user, is_default=False)
         return Response(LibraryOutSerializer(library).data, status=status.HTTP_201_CREATED)
@@ -50,7 +52,7 @@ class LibraryDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, library_id: int) -> Library:
-        # 查询带 owner 条件：不存在 / 不属于我 -> 统一 404（IDOR防护）
+        # 查询带 owner 条件：不存在 / 不属于我 -> 统一 404（IDOR 防护）
         # annotate 让详情响应也带 book_count
         return get_object_or_404(
             Library.objects.annotate(book_count=Count("books")),
@@ -60,7 +62,7 @@ class LibraryDetailView(APIView):
     @extend_schema(
         summary="查询图书馆详情",
         description="查询指定图书馆的详情，包括馆内所有图书",
-        responses=LibraryDetailOutSerializer
+        responses=LibraryDetailOutSerializer,
     )
     def get(self, request, library_id: int):
         library = self.get_object(library_id)
@@ -74,7 +76,7 @@ class LibraryDetailView(APIView):
     @extend_schema(
         summary="全量更新图书馆信息",
         request=LibraryUpdateSerializer,
-        responses=LibraryOutSerializer
+        responses=LibraryOutSerializer,
     )
     def put(self, request, library_id: int):
         return self._update(request, library_id, partial=False)
@@ -82,26 +84,29 @@ class LibraryDetailView(APIView):
     @extend_schema(
         summary="部分更新图书馆信息",
         request=LibraryUpdateSerializer,
-        responses=LibraryOutSerializer
+        responses=LibraryOutSerializer,
     )
     def patch(self, request, library_id: int):
         return self._update(request, library_id, partial=True)
 
     @extend_schema(
         summary="删除自定义图书馆（馆内书一并删除，默认馆不可删）",
-        responses=None
+        responses=None,
     )
     def delete(self, request, library_id: int):
         library = self.get_object(library_id)
         if library.is_default:
             return Response({"detail": "默认图书馆不能删除"}, status=status.HTTP_400_BAD_REQUEST)
-        # Book.library 的 on_delete = CASCADE：删馆连带删掉馆内所有书
+        # Book.library 的 on_delete=CASCADE：删馆连带删掉馆内所有书
         library.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _update(self, request, library_id: int, partial: bool):
         library = self.get_object(library_id)
-        serializer = LibraryUpdateSerializer(library, data=request.data, partial=partial)
+        # 传入 context 让 serializer.validate 能拿到当前用户做重名校验
+        serializer = LibraryUpdateSerializer(
+            library, data=request.data, partial=partial, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(LibraryOutSerializer(library).data, status=status.HTTP_200_OK)
@@ -115,7 +120,7 @@ class LibraryBookActionView(APIView):
         summary="把一批书移动到该馆",
         description='请求体：{"book_ids": [1, 2, 3]}。书必须属于当前用户；已在馆内的书保持不变（幂等）。',
         request=LibraryAddBooksSerializer,
-        responses={200: None}
+        responses={200: None},
     )
     def post(self, request, library_id: int):
         library = get_object_or_404(Library, library_id=library_id, owner=request.user)
@@ -129,7 +134,7 @@ class LibraryBookActionView(APIView):
 
     @extend_schema(
         summary="把一本书移回默认馆",
-        responses=None
+        responses=None,
     )
     def delete(self, request, library_id: int, book_id: int):
         library = get_object_or_404(Library, library_id=library_id, owner=request.user)
