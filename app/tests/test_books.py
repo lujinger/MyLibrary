@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from app.models.user import User
 from app.models.book import Book
+from app.models.library import Library
 
 class BookAPITestBase(APITestCase):
     """图书接口测试基类：准备两个用户，封装JWT登录态切换和造书操作"""
@@ -115,8 +116,11 @@ class BookListAPITests(BookAPITestBase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_list_page_size_capped_at_50(self):
+        # 直接用 ORM 造书会绕过视图的默认馆兜底，需手动指定 library（已非空）
+        default_library = Library.objects.get(owner=self.user_a, is_default=True)
         Book.objects.bulk_create([
-            Book(book_name=f'批量书{i}', author='批量作者', owner=self.user_a)
+            Book(book_name=f'批量书{i}', author='批量作者',
+                 owner=self.user_a, library=default_library)
             for i in range(60)
         ])
         resp = self.client.get(reverse('book-list'), {'page': 1, 'page_size': 100})
@@ -124,6 +128,7 @@ class BookListAPITests(BookAPITestBase):
         self.assertEqual(resp.data['total'], 63)
         self.assertEqual(resp.data['page_size'], 50)
         self.assertEqual(len(resp.data['items']), 50)
+
 
 class BookDetailAPITests(BookAPITestBase):
     """图书详情 + IDOR 防护"""

@@ -1,5 +1,6 @@
 from django.db import models
 
+from app.models.library import Library
 from app.models.user import User
 
 class Book(models.Model):
@@ -27,6 +28,12 @@ class Book(models.Model):
     borrow_status = models.CharField(max_length=10, choices=BORROW_STATUS_CHOICES, default='available', verbose_name="借阅状态")
     view_count = models.IntegerField(default=0, verbose_name="浏览次数")
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='books', verbose_name="书主")
+    # 每本书必须归属一个馆；馆删除时书级联删除（容器语义）
+    library = models.ForeignKey(
+        Library, on_delete=models.CASCADE,
+        related_name='books',
+        verbose_name="所属图书馆",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
