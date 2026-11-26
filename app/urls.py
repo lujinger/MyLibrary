@@ -3,6 +3,7 @@ from app.views import (
     RegisterView, LoginView, MeView,
     BookListView, BookDetailView,
     LibraryListView, LibraryDetailView, LibraryBookActionView,
+    BorrowListCreateView, BorrowReturnView,
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
@@ -18,6 +19,9 @@ urlpatterns = [
     path("library/<int:library_id>", LibraryDetailView.as_view(), name="library-detail"),
     path("library/<int:library_id>/books", LibraryBookActionView.as_view(), name="library-move-books"),
     path("library/<int:library_id>/books/<int:book_id>", LibraryBookActionView.as_view(), name="library-remove-book"),
+    # 借阅流程
+    path("borrow", BorrowListCreateView.as_view(), name="borrow-list"),
+    path("borrow/<int:record_id>/return", BorrowReturnView.as_view(), name="borrow-return"),
     # API 文档
     path("schema", SpectacularAPIView.as_view(), name="schema"),
     path("docs", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui")
