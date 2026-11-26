@@ -53,11 +53,12 @@ class BookListView(APIView):
         if keyword:
             queryset = queryset.filter(Q(book_name__icontains=keyword) | Q(author__icontains=keyword))
 
+        # items 传原始 queryset 切片，由 BookListOutSerializer 统一序列化，消除双重序列化反模式
         result = {
             'total': queryset.count(),
             'page': page,
             'page_size': page_size,
-            'items': BookOutSerializer(queryset[(page-1)*page_size:page*page_size], many=True).data,
+            'items': queryset[(page - 1) * page_size:page * page_size],
         }
         return Response(BookListOutSerializer(result).data, status=status.HTTP_200_OK)
 
